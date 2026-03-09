@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local data/cache
+data/*.json
+data/*.geojson
+data/*.csv
+data/*.duckdb
+ml/artifacts/
+!data/.gitkeep
+
+# Node (if any)
+node_modules/
+npm-debug.log*
+package-lock.json

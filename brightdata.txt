@@ -1,0 +1,24 @@
+Brightdata-API Key-0a130573-520c-443c-8b50-d49b91818c42
+royvvarghese@gmail.com
+
+$env:API_TOKEN="0a130573-520c-443c-8b50-d49b91818c42" npx -y @brightdata/mcp
+
+$env:API_TOKEN="<YOUR_BRIGHT_DATA_API>"; npx -y @brightdata/mcp
+
+{
+  "mcpServers": {
+    "Bright Data": {
+      "autoApprove": [],
+      "disabled": false,
+      "timeout": 300,
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@brightdata/mcp"
+      ],
+      "env": {
+        "API_TOKEN": "0a130573-520c-443c-8b50-d49b91818c42"
+      }
+    }
+  }
+}

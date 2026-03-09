@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Montgomery Civic Service Transparency — Phase 1</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <style>
+      :root { --bg:#0b1220; --fg:#e8eefc; --muted:#9fb3d9; --card:#111a2e; --accent:#4da3ff; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: system-ui, Arial, sans-serif; background:var(--bg); color:var(--fg); }
+      header { padding: 14px 18px; background: #0a1530; border-bottom: 1px solid #1f2b4a; }
+      header h1 { margin:0; font-size: 18px; font-weight:600; }
+      .container { display:flex; gap:12px; padding:12px; }
+      .side { width: 360px; min-width:320px; }
+      .card { background:var(--card); border:1px solid #1e2a47; border-radius:8px; padding:12px; margin-bottom:12px; }
+      .card h2 { margin:0 0 8px; font-size:14px; color:var(--muted); font-weight:600; }
+      .kpis { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+      .kpi { background:#0c1731; border:1px solid #1e2a47; padding:10px; border-radius:6px; }
+      .kpi .label { font-size:11px; color:var(--muted); }
+      .kpi .value { font-size:20px; font-weight:700; margin-top:4px; }
+      .filters label { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
+      .filters input { width:100%; padding:8px; border-radius:6px; border:1px solid #203055; background:#0b1631; color:var(--fg); }
+      .filters button { margin-top:10px; width:100%; padding:10px; border:0; border-radius:6px; background:var(--accent); color:#071222; font-weight:700; cursor:pointer; }
+      #map { height: calc(100vh - 84px); flex: 1; border:1px solid #1e2a47; border-radius:8px; }
+      footer { padding:10px 14px; color:var(--muted); font-size:12px; }
+      .legend { font-size:12px; color:var(--muted); margin-top:6px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Montgomery Civic Service Transparency — Phase 1 (Demo)</h1>
+    </header>
+    <div class="container">
+      <aside class="side">
+        <section class="card">
+          <h2>Key Metrics</h2>
+          <div class="kpis" id="kpis">
+            <div class="kpi"><div class="label">Open</div><div class="value" id="kpi-open">–</div></div>
+            <div class="kpi"><div class="label">Total</div><div class="value" id="kpi-total">–</div></div>
+            <div class="kpi"><div class="label">Closed (30d)</div><div class="value" id="kpi-c30">–</div></div>
+            <div class="kpi"><div class="label">Closed (90d)</div><div class="value" id="kpi-c90">–</div></div>
+            <div class="kpi"><div class="label">Median Res. (days)</div><div class="value" id="kpi-med">–</div></div>
+            <div class="kpi"><div class="label">On-time %</div><div class="value" id="kpi-ontime">–</div></div>
+          </div>
+          <div class="legend" id="last-updated">Last updated: –</div>
+        </section>
+        <section class="card">
+          <h2>Filters</h2>
+          <div class="filters">
+            <label>Status (contains)</label>
+            <input id="f-status" placeholder="e.g., Open, Closed" />
+            <label>Category (contains)</label>
+            <input id="f-category" placeholder="e.g., Pothole, Drainage" />
+            <label>Date from (ISO)</label>
+            <input id="f-from" placeholder="YYYY-MM-DD" />
+            <label>Date to (ISO)</label>
+            <input id="f-to" placeholder="YYYY-MM-DD" />
+            <button id="btn-apply">Apply Filters</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>About</h2>
+          <div class="legend">
+            Read-only demo powered by the City's public ArcGIS FeatureService. Priorities & SLAs shown are computed for transparency; official statuses mirror the source.
+          </div>
+        </section>
+      </aside>
+      <main id="map"></main>
+    </div>
+    <footer>
+      Data: City of Montgomery (ArcGIS). Demo UI for Phase 1.
+    </footer>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      const map = L.map('map').setView([32.3668, -86.3000], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      let layer;
+
+      async function loadKpis() {
+        try {
+          const res = await fetch('/api/kpis');
+          const d = await res.json();
+          document.getElementById('kpi-open').textContent = d.open ?? '–';
+          document.getElementById('kpi-total').textContent = d.total ?? '–';
+          document.getElementById('kpi-c30').textContent = d.closed_30 ?? '–';
+          document.getElementById('kpi-c90').textContent = d.closed_90 ?? '–';
+          document.getElementById('kpi-med').textContent = d.median_resolution_days?.toFixed?.(1) ?? '–';
+          document.getElementById('kpi-ontime').textContent = d.on_time_percent != null ? `${d.on_time_percent.toFixed(0)}%` : '–';
+          document.getElementById('last-updated').textContent = 'Last updated: ' + (d.last_updated ?? '–');
+        } catch (e) {
+          console.error('Failed to load KPIs', e);
+        }
+      }
+
+      function colorByStatus(status) {
+        const s = String(status||'').toLowerCase();
+        if (s.includes('closed') || s.includes('resolved') || s.includes('complete')) return '#35d07f';
+        return '#4da3ff';
+      }
+
+      async function loadGeojson() {
+        const s = document.getElementById('f-status').value.trim();
+        const c = document.getElementById('f-category').value.trim();
+        const df = document.getElementById('f-from').value.trim();
+        const dt = document.getElementById('f-to').value.trim();
+
+        const params = new URLSearchParams();
+        if (s) params.set('status', s);
+        if (c) params.set('category', c);
+        if (df) params.set('date_from', df);
+        if (dt) params.set('date_to', dt);
+
+        try {
+          const res = await fetch('/api/requests.geojson?' + params.toString());
+          const gj = await res.json();
+          if (layer) { layer.remove(); }
+          layer = L.geoJSON(gj, {
+            pointToLayer: (feature, latlng) => {
+              const pr = feature.properties?.priority_score ?? 0;
+              const st = feature.properties?.status;
+              const color = colorByStatus(st);
+              const radius = Math.max(5, Math.min(14, 5 + (pr/10)));
+              return L.circleMarker(latlng, {
+                radius, color, weight: 1, opacity: 0.9,
+                fillColor: color, fillOpacity: 0.35
+              });
+            },
+            onEachFeature: (feature, layer) => {
+              const p = feature.properties || {};
+              const lines = [
+                `<b>Status:</b> ${p.status ?? 'Unknown'}`,
+                `<b>Category:</b> ${p.category ?? '—'}`,
+                `<b>Priority:</b> ${p.priority_score ?? '—'}`,
+                `<b>SLA due:</b> ${p.sla_due_at ?? '—'}`,
+                `<b>Created:</b> ${p.created_at ?? '—'}`,
+                p.description_redacted ? `<hr/><div style='max-width:260px; white-space:pre-wrap;'>${(p.description_redacted||'').replaceAll('<','&lt;')}</div>` : ''
+              ].join('<br/>');
+              layer.bindPopup(lines);
+            }
+          }).addTo(map);
+          // Fit if we have features
+          const b = layer.getBounds();
+          if (b.isValid()) map.fitBounds(b.pad(0.2));
+        } catch (e) {
+          console.error('Failed to load GeoJSON', e);
+        }
+      }
+
+      document.getElementById('btn-apply').addEventListener('click', async () => {
+        await loadGeojson();
+        await loadKpis();
+      });
+
+      // Initial load
+      (async function init(){
+        await loadGeojson();
+        await loadKpis();
+      })();
+    </script>
+  </body>
+  </html>

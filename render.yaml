@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: montgomery-civic-phase1-web
+    env: docker
+    plan: free
+    healthCheckPath: /api/kpis
+    autoDeploy: true
+    previews: true
+
+cronJobs:
+  - name: montgomery-civic-phase1-ingestion
+    env: docker
+    schedule: "*/30 * * * *" # every 30 minutes
+    command: ["python", "ingestion/fetch_311.py"]
