@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import requests
 import streamlit as st
+from sidebar_theme import inject_sidebar_theme, render_sidebar_nav
 from streamlit_folium import st_folium
 import folium
 
@@ -10,6 +11,8 @@ import folium
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api")
 
 st.set_page_config(page_title="Clusters / Hotspots", layout="wide")
+inject_sidebar_theme()
+render_sidebar_nav()
 st.title("Clusters / Hotspots")
 
 
@@ -21,6 +24,7 @@ def get_request_types():
 
 
 with st.sidebar:
+    st.divider()
     days = st.slider("Last N days", 7, 120, 30, 1)
     rt = st.selectbox("Request Type", get_request_types())
     eps = st.slider("DBSCAN eps (meters)", 50, 1000, 200, 10)

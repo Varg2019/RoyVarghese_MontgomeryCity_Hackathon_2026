@@ -4,15 +4,19 @@ import json
 import pandas as pd
 import requests
 import streamlit as st
+from sidebar_theme import inject_sidebar_theme, render_sidebar_nav
 
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api")
 
 st.set_page_config(page_title="Possible Misroutes", layout="wide")
+inject_sidebar_theme()
+render_sidebar_nav()
 st.title("Possible Misroutes")
 
 
 with st.sidebar:
+    st.divider()
     st.header("Filters")
     status = st.selectbox("Status", ["All", "Open", "In Progress"], index=1)
     min_conf = st.slider("Min confidence", 0.5, 0.99, 0.8, 0.01)

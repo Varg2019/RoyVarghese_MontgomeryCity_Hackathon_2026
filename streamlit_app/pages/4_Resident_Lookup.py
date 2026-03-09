@@ -2,11 +2,14 @@ import os
 import requests
 import streamlit as st
 import pandas as pd
+from sidebar_theme import inject_sidebar_theme, render_sidebar_nav
 
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api")
 
 st.set_page_config(page_title="Resident Ticket Lookup", layout="centered")
+inject_sidebar_theme()
+render_sidebar_nav()
 st.title("Resident Ticket Lookup")
 
 req_id = st.text_input("Enter Request ID")

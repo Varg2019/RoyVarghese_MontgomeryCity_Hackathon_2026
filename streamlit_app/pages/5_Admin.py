@@ -2,11 +2,14 @@ import os
 from pathlib import Path
 import requests
 import streamlit as st
+from sidebar_theme import inject_sidebar_theme, render_sidebar_nav
 
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api")
 
 st.set_page_config(page_title="Admin", layout="centered")
+inject_sidebar_theme()
+render_sidebar_nav()
 st.title("Admin & Config")
 
 st.subheader("Ingestion")

@@ -4,11 +4,14 @@ from typing import Dict, Any
 import pandas as pd
 import requests
 import streamlit as st
+from sidebar_theme import inject_sidebar_theme, render_sidebar_nav
 
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/api")
 
 st.set_page_config(page_title="Triage Console", layout="wide")
+inject_sidebar_theme()
+render_sidebar_nav()
 st.title("Triage Console")
 
 
@@ -20,6 +23,7 @@ def get_distinct(field: str):
 
 
 with st.sidebar:
+    st.divider()
     st.header("Filters")
     status = st.selectbox("Status", ["All", "Open", "In Progress", "Closed"], index=1)
     dept = st.selectbox("Department", ["All"] + get_distinct("Department"))
