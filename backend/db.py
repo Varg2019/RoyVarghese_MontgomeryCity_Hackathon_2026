@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import os
 import duckdb
 from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "mgm_311.duckdb"
+
+
+def resolve_db_path() -> Path:
+    raw = os.getenv("DB_PATH", "").strip()
+    if not raw:
+        return DATA_DIR / "mgm_311.duckdb"
+    p = Path(raw)
+    if not p.is_absolute():
+        p = ROOT / p
+    return p
 
 
 def get_con(read_only: bool = False) -> duckdb.DuckDBPyConnection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    db_path = resolve_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     # Allow multiple connections in the same app/runtime by disabling the single-process file lock behavior.
-    return duckdb.connect(str(DB_PATH), config={"access_mode": "AUTOMATIC"})
+    return duckdb.connect(str(db_path), config={"access_mode": "AUTOMATIC"})
 
 
 def init_tables():
