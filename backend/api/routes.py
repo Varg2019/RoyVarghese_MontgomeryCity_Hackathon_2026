@@ -12,6 +12,7 @@ from backend.services.routing import recommend_department
 from backend.services.eta import eta_for_ticket
 from backend.services.clusters import detect_clusters
 from backend.services.templates import render_update
+from backend.services.bootstrap import ensure_data_loaded
 
 
 router = APIRouter()
@@ -19,6 +20,7 @@ router = APIRouter()
 
 @router.get("/meta/distincts")
 def get_distincts(field: str = Query(..., pattern="^(Request_Type|Department|Origin|District|Status)$")):
+    ensure_data_loaded()
     con = get_con()
     rows = con.execute(f"select distinct {field} from tickets where {field} is not null and {field} <> '' order by 1").fetchall()
     return {"field": field, "values": [r[0] for r in rows]}
@@ -37,6 +39,7 @@ def api_ingest(csv_filename: str = Body(embed=True)):
 @router.get("/tickets/{request_id}")
 def get_ticket(request_id: str):
     try:
+        ensure_data_loaded()
         con = get_con()
         row = con.execute(
             """
@@ -78,6 +81,7 @@ def list_tickets(
     limit: int = Query(default=100, ge=1, le=10000),
     offset: int = Query(default=0, ge=0),
 ):
+    ensure_data_loaded()
     con = get_con()
     where = []
     params = []
@@ -120,6 +124,7 @@ def list_tickets(
 
 @router.get("/ops/kpis")
 def get_kpis():
+    ensure_data_loaded()
     con = get_con()
     total = con.execute("select count(*) from tickets").fetchone()[0]
     open_ct = con.execute("select count(*) from tickets where not (Status ilike '%closed%')").fetchone()[0]
@@ -135,6 +140,7 @@ def get_kpis():
 
 @router.get("/ops/misroutes")
 def get_misroutes(status: str = Query(default="All"), min_conf: float = Query(default=0.8)):
+    ensure_data_loaded()
     con = get_con()
     where = []
     if status in ("Open", "In Progress"):
@@ -174,6 +180,7 @@ def post_recommend_department(payload: Dict[str, Any] = Body(...)):
 
 @router.get("/ops/clusters")
 def get_clusters(days: int = Query(default=30), request_type: Optional[str] = Query(default=None), eps: int = Query(default=200), min_samples: int = Query(default=5)):
+    ensure_data_loaded()
     return detect_clusters(days=days, request_type=request_type, eps_meters=eps, min_samples=min_samples)
 
 
