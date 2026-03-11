@@ -1,5 +1,6 @@
 import os
 import base64
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -28,18 +29,65 @@ skyline_b64 = image_to_base64(SKYLINE_PATH)
 emblem_b64 = image_to_base64(EMBLEM_PATH)
 
 
+def get_json_with_retry(url: str, params: dict | None = None, timeout: int = 30, attempts: int = 3):
+    last_err = None
+    for i in range(attempts):
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last_err = e
+            if i < attempts - 1:
+                time.sleep(1.4 * (i + 1))
+    raise last_err
+
+
+def find_snapshot_csv() -> Path | None:
+    preferred = ROOT / "data" / os.getenv("AUTO_BOOTSTRAP_CSV", "requests_extract_20000.csv")
+    if preferred.exists():
+        return preferred
+    csv_files = sorted((ROOT / "data").glob("*.csv"))
+    return csv_files[0] if csv_files else None
+
+
+@st.cache_data(ttl=300)
+def load_snapshot(limit: int = 5000) -> pd.DataFrame:
+    csv_path = find_snapshot_csv()
+    if not csv_path:
+        return pd.DataFrame()
+    df = pd.read_csv(csv_path)
+    if "Request_ID" not in df.columns:
+        return pd.DataFrame()
+    return df.head(limit).copy()
+
+
+def compute_kpis_from_snapshot(df: pd.DataFrame) -> dict:
+    if df.empty or "Status" not in df.columns:
+        return {"total": 0, "open": 0, "mean_time_to_close_days": 0.0}
+    total = int(len(df))
+    status = df["Status"].astype(str).str.lower()
+    open_ct = int((~status.str.contains("closed")).sum())
+    close_days = 0.0
+    if {"Create_Date", "Close_Date"}.issubset(df.columns):
+        closed_mask = status.str.contains("closed") & df["Close_Date"].notna() & df["Create_Date"].notna()
+        if closed_mask.any():
+            days = (pd.to_numeric(df.loc[closed_mask, "Close_Date"], errors="coerce") - pd.to_numeric(df.loc[closed_mask, "Create_Date"], errors="coerce")) / 86400000.0
+            days = days.dropna()
+            if not days.empty:
+                close_days = float(days.mean())
+    return {"total": total, "open": open_ct, "mean_time_to_close_days": close_days}
+
+
 @st.cache_data(ttl=30)
 def fetch_kpis():
-    r = requests.get(f"{API_BASE}/ops/kpis", timeout=30)
-    r.raise_for_status()
-    return r.json()
+    return get_json_with_retry(f"{API_BASE}/ops/kpis", timeout=30, attempts=3)
 
 
 @st.cache_data(ttl=45)
 def fetch_summary(limit: int = 5000):
-    r = requests.get(f"{API_BASE}/tickets", params={"limit": limit}, timeout=60)
-    r.raise_for_status()
-    return pd.DataFrame(r.json().get("items", []))
+    payload = get_json_with_retry(f"{API_BASE}/tickets", params={"limit": limit}, timeout=60, attempts=3)
+    return pd.DataFrame(payload.get("items", []))
 
 
 def build_status_department_summary(df: pd.DataFrame) -> pd.DataFrame:
@@ -319,16 +367,35 @@ try:
         ]
     )
     kpi_fetched_at = datetime.now()
+    used_snapshot = False
 except Exception as e:
-    st.warning(f"KPI service unavailable: {e}")
-    aggregate_df = pd.DataFrame()
-    kpi_fetched_at = None
+    snap_df = load_snapshot()
+    if snap_df.empty:
+        st.warning(f"KPI service unavailable: {e}")
+        aggregate_df = pd.DataFrame()
+        kpi_fetched_at = None
+        used_snapshot = False
+    else:
+        k = compute_kpis_from_snapshot(snap_df)
+        aggregate_df = pd.DataFrame(
+            [
+                {
+                    "Total Tickets": f"{k.get('total', 0):,}",
+                    "Open Backlog": f"{k.get('open', 0):,}",
+                    "Avg Days to Close": round(k.get("mean_time_to_close_days", 0.0), 2),
+                }
+            ]
+        )
+        kpi_fetched_at = datetime.now()
+        used_snapshot = True
 
 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 render_sidebar_nav()
 
 st.markdown('<div class="panel-title">Service Request Status Summary Review</div>', unsafe_allow_html=True)
+if used_snapshot:
+    st.caption("Showing cached snapshot data while backend warms up.")
 
 if not aggregate_df.empty:
     render_aggregate_table(aggregate_df, kpi_fetched_at)
@@ -337,11 +404,19 @@ else:
 
 try:
     df = fetch_summary()
+    summary_used_snapshot = False
+    if df.empty:
+        snap_df = load_snapshot()
+        if not snap_df.empty:
+            df = snap_df
+            summary_used_snapshot = True
     summary = build_status_department_summary(df)
     if summary.empty:
         st.info("No ticket data available yet. Please run ingestion from the Admin page.")
     else:
         st.markdown('<div class="panel-title">Department-wise ticket summary</div>', unsafe_allow_html=True)
+        if summary_used_snapshot:
+            st.caption("Department summary currently using cached snapshot data.")
         st.dataframe(
             style_table(summary.reset_index(drop=True)),
             use_container_width=True,
@@ -349,4 +424,16 @@ try:
             height=560,
         )
 except Exception as e:
-    st.warning(f"Unable to build summary table: {e}")
+    snap_df = load_snapshot()
+    summary = build_status_department_summary(snap_df)
+    if summary.empty:
+        st.warning(f"Unable to build summary table: {e}")
+    else:
+        st.markdown('<div class="panel-title">Department-wise ticket summary</div>', unsafe_allow_html=True)
+        st.caption("Department summary currently using cached snapshot data.")
+        st.dataframe(
+            style_table(summary.reset_index(drop=True)),
+            use_container_width=True,
+            hide_index=True,
+            height=560,
+        )
